@@ -1,6 +1,8 @@
 """Page web autonome des résultats du pool (HTML unique, CSS inline, logos depuis assets.nhle.com)."""
-import time
+import json
 from html import escape as esc
+
+import scoring
 
 LOGO = "https://assets.nhle.com/logos/nhl/svg/{abbr}_light.svg"
 POS_FR = {"F": "Attaquant", "D": "Défenseur", "G": "Gardien"}
@@ -48,6 +50,15 @@ tr.gone td{opacity:.45;text-decoration:line-through}
 .hof{display:flex;flex-wrap:wrap;gap:10px}.hof .h{border:1px solid var(--gold2);border-radius:12px;padding:10px 14px;background:var(--panel2);text-align:center}
 .hof .h b{font-family:Bahnschrift,"Arial Narrow",sans-serif;font-size:18px;display:block}
 .moves li{margin:4px 0;font-size:14px}
+tr.pl{cursor:pointer}tr.pl:hover td{background:rgba(128,128,128,.08)}
+#pc{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:16px;z-index:9}
+#pc.on{display:flex}#pc .card{max-width:440px;width:100%;position:relative}#pc .x{position:absolute;top:8px;right:10px}
+.pch{display:flex;gap:12px;align-items:center}.pch img.hs{width:84px;height:84px;border-radius:50%;background:var(--panel2);object-fit:cover}
+.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0}.sg div{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center}
+.sg b{display:block;font-family:Bahnschrift,"Arial Narrow",sans-serif;font-size:20px}.sg span{font-size:11px;color:var(--muted);letter-spacing:1px}
+.live{display:inline-block;background:#E0243B;color:#fff;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700;letter-spacing:2px;animation:bl 1.4s infinite}
+@keyframes bl{50%{opacity:.45}}
+.board{overflow-x:auto}.board table{min-width:600px}.board td{font-size:13px;vertical-align:top}.board td.last{outline:2px solid var(--gold2);outline-offset:-2px}
 .muted{color:var(--muted)}.foot{margin-top:40px;color:var(--muted);font-size:12px;text-align:center}
 @media(max-width:640px){.podium{grid-template-columns:1fr}h1{font-size:28px}td,th{padding:7px 6px}.hide-sm{display:none}.grid2{grid-template-columns:1fr}}
 """
@@ -56,7 +67,21 @@ JS = """
 (function(){var k='pool-theme',t=localStorage.getItem(k);if(t)document.documentElement.dataset.theme=t;
 document.getElementById('theme').onclick=function(){var c=document.documentElement.dataset.theme==='light'?'':'light';
 document.documentElement.dataset.theme=c;localStorage.setItem(k,c);};
-if(location.hash){var e=document.getElementById(location.hash.slice(1));if(e)e.scrollIntoView();}})();
+if(location.hash){var e=document.getElementById(location.hash.slice(1));if(e)e.scrollIntoView();}
+var D=document.getElementById('pdata');if(!D)return;D=JSON.parse(D.textContent);var M=document.getElementById('pc');
+function h(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function box(v,l){return '<div><b>'+(v==null?'–':v)+'</b><span>'+l+'</span></div>';}
+document.addEventListener('click',function(ev){var tr=ev.target.closest('tr.pl');if(ev.target===M||ev.target.closest('#pc .x')){M.className='';return;}if(!tr)return;
+var p=D.p[tr.dataset.p];if(!p)return;var s=p.st||{},g=p.pos==='G';
+M.querySelector('.card').innerHTML='<button class="btn x">✕</button><div class="pch">'+(p.hs?'<img class="hs" src="'+h(p.hs)+'" alt="">':'')+'<div><h3>'+h(p.n)+'</h3><div class="muted">'+h(p.posFr)+' · '+h(p.team)+(p.num?' · #'+p.num:'')+'</div>'
++'<div style="margin-top:4px"><span class="dot" style="background:'+p.c+'"></span>'+h(p.o)+(p.ov?' · choix n° '+p.ov+' (ronde '+p.r+')':'')+'</div></div></div>'
++'<div class="sg">'+(g?box(s.gp,'PJ')+box(s.w,'V')+box(s.so,'BL')+box(s.svp!=null?(s.svp).toFixed(3):null,'%ARR'):box(s.gp,'PJ')+box(s.g,'B')+box(s.a,'A')+box(s.pm,'+/-'))+'</div>'
++'<table>'+p.brk.map(function(x){return '<tr><td>'+x[0]+' '+h(x[2])+' × '+x[1]+'</td><td class="num">'+(+(x[0]*x[1]).toFixed(2))+'</td></tr>';}).join('')
++(p.base?'<tr><td class="muted">avant son arrivée dans l’équipe</td><td class="num">−'+p.base+'</td></tr>':'')
++'<tr><td><b>Points au pool</b></td><td class="num tot">'+p.fp+'</td></tr>'+(p.y?'<tr><td class="muted">dont hier</td><td class="num">+'+p.y+'</td></tr>':'')+'</table>';
+M.className='on';});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')M.className='';});
+})();
 """
 
 
@@ -102,7 +127,83 @@ def _chart(rows, dates):
     return f'<svg class="chart" viewBox="0 0 {W} {H}" preserveAspectRatio="none">{grid}{lines}{labels}</svg><div class="legend">{legend}</div>'
 
 
-def build_html(pool, res, teams_by_abbr, updated_at, hall_of_fame=None):
+def _json_script(id_, data):
+    return f'<script type="application/json" id="{id_}">{json.dumps(data, ensure_ascii=False).replace("</", "<\\/")}</script>'
+
+
+SK_CATS = (("g", "goal", "buts"), ("a", "assist", "passes"), ("ppg", "ppGoal", "buts en AN"), ("shg", "shGoal", "buts en DN"),
+           ("gwg", "gwg", "buts gagnants"), ("otg", "otGoal", "buts en prol."), ("pm", "plusMinus", "+/-"))
+G_CATS = (("w", "goalieWin", "victoires"), ("so", "shutout", "blanchissages"), ("otl", "goalieOtl", "défaites en prol."))
+
+
+def _player_data(pool, rows):
+    """Fiche de chaque joueur d'un alignement, pour la fenêtre ouverte au clic."""
+    pts = pool["rules"]["points"]
+    yest = {str(d["player"]["id"]): d["fp"] for x in rows for d in x["yesterday"]["lines"]}
+    out = {}
+    for x in rows:
+        part = x["participant"]
+        for l in x["lines"]:
+            pl, st = l["player"], l["stat"] or {}
+            pid = str(pl["id"])
+            if pid in out and l["gone"]:
+                continue
+            g = pl["pos"] == "G"
+            brk = [[st.get(k, 0), _fmt(pts.get(m, 0)), lbl] for k, m, lbl in (G_CATS if g else SK_CATS) if st.get(k) and pts.get(m)]
+            if g and pts.get("goalieGoalAssist") and st.get("g", 0) + st.get("a", 0):
+                brk.append([st.get("g", 0) + st.get("a", 0), _fmt(pts["goalieGoalAssist"]), "points"])
+            full = scoring.player_points(pl, st, pts)
+            out[pid] = {"n": f'{pl["first"]} {pl["last"]}', "pos": pl["pos"], "posFr": POS_FR[pl["pos"]], "num": pl.get("num"),
+                        "team": st.get("team") or pl["team"], "hs": pl.get("headshot"), "o": part["name"], "c": part["color"],
+                        "r": l["round"], "ov": l["overall"], "fp": _fmt(l["fp"]), "y": _fmt(yest.get(pid, 0)), "brk": brk,
+                        "base": _fmt(round(full - l["fp"], 2)) if not l["gone"] and full - l["fp"] > 0.001 else 0,
+                        "st": {k: st.get(k) for k in ("gp", "g", "a", "pm", "w", "so", "svp")}}
+    return out
+
+
+def _draft_html(pool, teams_by_abbr, players):
+    """Tableau du repêchage en cours (page publique rafraîchie toutes les minutes)."""
+    n_total = len(pool["order"]) * sum(pool["rules"]["roster"].values())
+    picks = pool["picks"]
+    n = len(pool["order"])
+    part = {p["id"]: p for p in pool["participants"]}
+    by = {(pk["round"], pk["participantId"]): pk for pk in picks}
+    rounds = (len(picks) // n) + 1
+    pname = lambda i: (lambda pl: f'{pl.get("first", "")} {pl.get("last", i)}'.strip())(players.get(str(i)) or {})
+    ppos = lambda i: (players.get(str(i)) or {}).get("pos", "")
+    i = len(picks)
+    r, slot = divmod(i, n)
+    up = part[pool["order"][n - 1 - slot if pool["rules"]["snake"] and r % 2 else slot]] if i < n_total else None
+    last = picks[-1] if picks else None
+    head = "".join(f'<th>{k + 1}. <span class="dot" style="background:{part[pid]["color"]}"></span>{esc(part[pid]["name"])}'
+                   f'<br><img class="logo sm" src="{LOGO.format(abbr=part[pid]["team"])}" alt=""> <span class="muted">{esc(part[pid]["team"] or "")}</span></th>'
+                   for k, pid in enumerate(pool["order"]))
+    body = ""
+    for rd in range(1, min(rounds, sum(pool["rules"]["roster"].values())) + 1):
+        cells = ""
+        for pid in pool["order"]:
+            pk = by.get((rd, pid))
+            cells += (f'<td class="{"last" if pk is last else ""}"><span class="tag {ppos(pk["playerId"])}">{ppos(pk["playerId"])}</span> {esc(pname(pk["playerId"]))}'
+                      f'<div class="muted" style="font-size:11px">n° {pk["overall"]}</div></td>' if pk else "<td></td>")
+        body += f'<tr><td class="muted">R{rd}</td>{cells}</tr>'
+    recent = "".join(f'<li><b>n° {pk["overall"]}</b> — <span style="color:{part[pk["participantId"]]["color"]}">{esc(part[pk["participantId"]]["name"])}</span> : '
+                     f'{esc(pname(pk["playerId"]))} <span class="tag {ppos(pk["playerId"])}">{ppos(pk["playerId"])}</span></li>' for pk in reversed(picks[-8:]))
+    now = (f'<div class="card" style="margin-top:16px"><span class="live">EN DIRECT</span> &nbsp; Au choix : <b style="color:{up["color"]}">{esc(up["name"])}</b>'
+           f' <span class="muted">· choix n° {i + 1} de {n_total} · ronde {r + 1}</span></div>') if up else ""
+    return f"""<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="60"><title>{esc(pool["name"])} — Repêchage en direct</title><style>{CSS}</style></head><body><div class="wrap">
+<div class="top"><div class="sp"><h1>{esc(pool["name"])}</h1><p class="sub">Repêchage en direct · {len(picks)} choix sur {n_total} · la page se recharge seule (délai de quelques minutes)</p></div><button class="btn" id="theme">☀️ / 🌙</button></div>
+{now}
+{f'<h2>Derniers choix</h2><div class="card"><ul class="moves">{recent}</ul></div>' if recent else ""}
+<h2>Tableau</h2><div class="card board" style="padding:0"><table><thead><tr><th></th>{head}</tr></thead><tbody>{body}</tbody></table></div>
+<p class="foot">Données : NHL.com. Généré par Repêchage Fantasy LNH.</p></div>
+<script>{JS}</script></body></html>"""
+
+
+def build_html(pool, res, teams_by_abbr, updated_at, hall_of_fame=None, players=None):
+    players = players or pool.get("players") or {}
+    if pool.get("order") and len(pool["picks"]) < len(pool["order"]) * sum(pool["rules"]["roster"].values()):
+        return _draft_html(pool, teams_by_abbr, players)
     rows, flags = res["rows"], res.get("flags", {})
     pts = pool["rules"]["points"]
     season = _season(pool["rules"]["season"])
@@ -149,7 +250,7 @@ def build_html(pool, res, teams_by_abbr, updated_at, hall_of_fame=None):
         for l in x["lines"]:
             pl, s = l["player"], l["stat"] or {}
             g = pl["pos"] == "G"
-            lines += (f'<tr class="{"gone" if l["gone"] else ""}"><td class="muted hide-sm">{l["round"] or "–"}</td><td><b>{pname(pl)}</b>{"" if l["gone"] else flag_html(pl, l)}{f" <span class=muted>(parti le {l["gone"]})</span>" if l["gone"] else ""}</td>'
+            lines += (f'<tr class="pl{" gone" if l["gone"] else ""}" data-p="{pl["id"]}"><td class="muted hide-sm">{l["round"] or "–"}</td><td><b>{pname(pl)}</b>{"" if l["gone"] else flag_html(pl, l)}{f" <span class=muted>(parti le {l["gone"]})</span>" if l["gone"] else ""}</td>'
                       f'<td><span class="tag {pl["pos"]}">{pl["pos"]}</span></td><td>{logo(s.get("team") or pl["team"], "logo sm")}</td>'
                       f'<td class="num hide-sm">{s.get("gp", 0)}</td><td class="num">{"–" if g else s.get("g", 0)}</td><td class="num">{"–" if g else s.get("a", 0)}</td>'
                       f'<td class="num">{s.get("w", 0) if g else "–"}</td><td class="num">{s.get("so", 0) if g else "–"}</td><td class="num tot" style="font-size:16px">{_fmt(l["fp"])}</td></tr>')
@@ -174,7 +275,6 @@ def build_html(pool, res, teams_by_abbr, updated_at, hall_of_fame=None):
 
     troph = "".join(f'<div class="tro"><div class="tn">{esc(t["name"])}</div><div class="tp">{esc(t["player"])} <span class="muted">({t["team"]})</span></div><div class="td">{esc(t["desc"])} · {_fmt(t["value"])} pts · <span style="color:{t["color"]}">{esc(t["who"])}</span>{f" · {esc(t['extra'])}" if t.get("extra") else ""}</div></div>' for t in res.get("trophies", []))
 
-    players = pool.get("players") or {}
     def pl_name(i):
         pl = players.get(str(i)) or {}
         return f"{pl.get('first', '')} {pl.get('last', i)}".strip()
@@ -208,4 +308,5 @@ def build_html(pool, res, teams_by_abbr, updated_at, hall_of_fame=None):
 {f'<h2>Transactions</h2><div class="card"><ul class="moves">{moves}</ul></div>' if moves else ""}
 {f'<h2>Mur des champions</h2><div class="hof">{hof}</div>' if hof else ""}
 <p class="foot">Barème : {bareme}. Remplacements permis : {pool["rules"].get("maxReplacements", 2)} par participant{f" · date limite des transactions : {pool['rules']['tradeDeadline']}" if pool["rules"].get("tradeDeadline") else ""}. Données : NHL.com. Généré par Repêchage Fantasy LNH.</p></div>
+<div id="pc"><div class="card"></div></div>{_json_script("pdata", {"p": _player_data(pool, rows)})}
 <script>{JS}</script></body></html>"""

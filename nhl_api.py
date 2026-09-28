@@ -120,8 +120,9 @@ class NHL:
             }
         return out
 
-    def _each_team(self, fn, abbrs, progress):
-        """Appelle fn(abbr) pour chaque équipe en parallèle (I/O réseau) ; une équipe injoignable est ignorée."""
+    def _each_team(self, fn, abbrs, progress, strict=False):
+        """Appelle fn(abbr) pour chaque équipe en parallèle (I/O réseau) ; une équipe injoignable est ignorée,
+        sauf en mode strict où elle fait échouer l'appel (des stats partielles fausseraient le classement)."""
         def one(ab):
             try:
                 return fn(ab)
@@ -133,15 +134,18 @@ class NHL:
                 results.append(r)
                 if progress:
                     progress(i, len(abbrs))
+        missing = [ab for ab, r in zip(abbrs, results) if r is None]
+        if strict and missing:
+            raise RuntimeError(f"LNH injoignable pour {len(missing)} équipe(s) : {', '.join(missing)}")
         return [r for r in results if r is not None]
 
     def all_rosters(self, season, abbrs, force=False, progress=None):
         return [p for team in self._each_team(lambda ab: self.roster(ab, season, force), abbrs, progress) for p in team]
 
-    def all_club_stats(self, season, abbrs, force=False, progress=None, game_type=2):
+    def all_club_stats(self, season, abbrs, force=False, progress=None, game_type=2, strict=False):
         """Stats de tous les joueurs ; un joueur échangé (présent chez deux équipes) voit ses compteurs additionnés."""
         stats = {}
-        for team in self._each_team(lambda ab: self.club_stats(ab, season, force, game_type), abbrs, progress):
+        for team in self._each_team(lambda ab: self.club_stats(ab, season, force, game_type), abbrs, progress, strict):
             for pid, st in team.items():
                 if pid in stats:
                     old = stats[pid]

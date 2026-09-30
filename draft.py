@@ -154,6 +154,39 @@ def needs(pool, pid, players):
     return all_needs(pool, players)[pid]
 
 
+def reserved(pool, but=None):
+    """Joueurs protégés par les participants (sauf `but`) : personne d'autre ne peut les repêcher."""
+    return {str(k) for p in pool["participants"] if p["id"] != but for k in p.get("keepers", [])}
+
+
+def play_keepers(pool, players):
+    """Tant que c'est au tour d'un participant qui a encore des joueurs protégés, on les place d'office
+    (ils occupent ses premières rondes). Renvoie le nombre de sélections faites."""
+    n = 0
+    while True:
+        cur = current_pick(pool)
+        if cur is None:
+            return n
+        taken = {str(pk["playerId"]) for pk in pool["picks"]}
+        nd = needs(pool, cur["participantId"], players)
+        left = [k for k in participant(pool, cur["participantId"]).get("keepers", [])
+                if str(k) not in taken and str(k) in players and nd[players[str(k)]["pos"]] > 0]
+        if not left:
+            return n
+        _add_pick(pool, cur, left[0], keeper=True)
+        n += 1
+
+
+def _add_pick(pool, cur, player_id, keeper=False):
+    pick = dict(cur, playerId=int(player_id), at=time.strftime("%H:%M:%S"))
+    if keeper:
+        pick["keeper"] = True
+    pool["picks"].append(pick)
+    if current_pick(pool) is None:
+        pool["step"] = "season"
+    return pick
+
+
 def make_pick(pool, player_id, players):
     cur = current_pick(pool)
     if cur is None:
@@ -166,18 +199,25 @@ def make_pick(pool, player_id, players):
     pl = players[key]
     if needs(pool, cur["participantId"], players)[pl["pos"]] <= 0:
         raise ValueError({"F": "Attaquants complets", "D": "Défenseurs complets", "G": "Gardien déjà choisi"}[pl["pos"]])
-    pick = dict(cur, playerId=int(player_id), at=time.strftime("%H:%M:%S"))
-    pool["picks"].append(pick)
-    if current_pick(pool) is None:
-        pool["step"] = "season"
+    if key in reserved(pool, cur["participantId"]):
+        raise ValueError("Ce joueur est protégé par un autre participant")
+    pick = _add_pick(pool, cur, player_id)
+    play_keepers(pool, players)
     return pick
 
 
 def undo_pick(pool):
-    if not pool["picks"]:
+    """Annule la dernière vraie sélection (les joueurs protégés placés d'office suivent)."""
+    picks = pool["picks"]
+    i = len(picks)
+    while i and picks[i - 1].get("keeper"):
+        i -= 1
+    if not i:
         raise ValueError("Aucune sélection à annuler")
     pool["step"] = "draft"
-    return pool["picks"].pop()
+    out = picks[i - 1]
+    del picks[i - 1:]
+    return out
 
 
 def auto_pick(pool, players, rng=random):
@@ -186,7 +226,7 @@ def auto_pick(pool, players, rng=random):
     if cur is None:
         return None
     nd = needs(pool, cur["participantId"], players)
-    taken = {str(pk["playerId"]) for pk in pool["picks"]}
+    taken = {str(pk["playerId"]) for pk in pool["picks"]} | reserved(pool, cur["participantId"])
 
     pts = pool["rules"]["points"]
 

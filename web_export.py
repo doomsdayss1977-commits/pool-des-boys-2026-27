@@ -188,7 +188,7 @@ def _draft_html(pool, teams_by_abbr, players):
         cells = ""
         for pid in pool["order"]:
             pk = by.get((rd, pid))
-            cells += (f'<td class="{"last" if pk is last else ""}"><span class="tag {ppos(pk["playerId"])}">{ppos(pk["playerId"])}</span> {esc(pname(pk["playerId"]))}'
+            cells += (f'<td class="{"last" if pk is last else ""}"><span class="tag {ppos(pk["playerId"])}">{ppos(pk["playerId"])}</span> {"🔒 " if pk.get("keeper") else ""}{esc(pname(pk["playerId"]))}'
                       f'<div class="muted" style="font-size:11px">n° {pk["overall"]}</div></td>' if pk else "<td></td>")
         body += f'<tr><td class="muted">R{rd}</td>{cells}</tr>'
     recent = "".join(f'<li><b>n° {pk["overall"]}</b> — <span style="color:{part[pk["participantId"]]["color"]}">{esc(part[pk["participantId"]]["name"])}</span> : '

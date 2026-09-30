@@ -73,6 +73,7 @@ JS = """
 document.getElementById('theme').onclick=function(){var c=document.documentElement.dataset.theme==='light'?'':'light';
 document.documentElement.dataset.theme=c;localStorage.setItem(k,c);};
 if(location.hash){var e=document.getElementById(location.hash.slice(1));if(e)e.scrollIntoView();}
+var T0=Date.now();document.addEventListener('visibilitychange',function(){if(!document.hidden&&Date.now()-T0>6e5)location.reload();});
 var D=document.getElementById('pdata');if(!D)return;D=JSON.parse(D.textContent);var M=document.getElementById('pc');
 function h(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function box(v,l){return '<div><b>'+(v==null?'–':v)+'</b><span>'+l+'</span></div>';}
@@ -88,6 +89,21 @@ M.className='on';});
 document.addEventListener('keydown',function(e){if(e.key==='Escape')M.className='';});
 })();
 """
+
+
+def _app_head(pool):
+    """Balises pour « Ajouter à l'écran d'accueil » (iPhone/Android) : icône, plein écran, nom court."""
+    return ('<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">'
+            '<meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="theme-color" content="#070B14">'
+            f'<meta name="apple-mobile-web-app-title" content="{esc(pool["name"])}">'
+            '<link rel="apple-touch-icon" href="icon-180.png"><link rel="manifest" href="manifest.webmanifest">')
+
+
+def manifest(pool):
+    return json.dumps({"name": pool["name"], "short_name": pool["name"][:12].strip(), "start_url": "./", "display": "standalone",
+                       "background_color": "#070B14", "theme_color": "#070B14", "lang": "fr",
+                       "icons": [{"src": "icon-180.png", "sizes": "180x180", "type": "image/png"},
+                                 {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"}]}, ensure_ascii=False)
 
 
 def _fmt(v):
@@ -195,7 +211,7 @@ def _draft_html(pool, teams_by_abbr, players):
                      f'{esc(pname(pk["playerId"]))} <span class="tag {ppos(pk["playerId"])}">{ppos(pk["playerId"])}</span></li>' for pk in reversed(picks[-8:]))
     now = (f'<div class="card" style="margin-top:16px"><span class="live">EN DIRECT</span> &nbsp; Au choix : <b style="color:{up["color"]}">{esc(up["name"])}</b>'
            f' <span class="muted">· choix n° {i + 1} de {n_total} · ronde {r + 1}</span></div>') if up else ""
-    return f"""<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    return f"""<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">{_app_head(pool)}
 <meta http-equiv="refresh" content="60"><title>{esc(pool["name"])} — Repêchage en direct</title><style>{CSS}</style></head><body><div class="wrap">
 <div class="top"><div class="sp"><h1>{esc(pool["name"])}</h1><p class="sub">Repêchage en direct · {len(picks)} choix sur {n_total} · la page se recharge seule (délai de quelques minutes)</p></div><button class="btn" id="theme">☀️ / 🌙</button></div>
 {now}
@@ -318,7 +334,7 @@ def build_html(pool, res, teams_by_abbr, updated_at, hall_of_fame=None, players=
                f'<div><h2>🧊 À froid · 7 jours</h2><div class="card">{form(res.get("cold", []), True) or "<p class=muted>Personne en panne sèche.</p>"}</div></div></div>')
 
     bareme = " · ".join(f"{lbl} {_fmt(pts[k])}" for k, lbl in (("goal", "but"), ("assist", "passe"), ("teamWin", "victoire d'équipe"), ("goalieWin", "victoire du gardien"), ("shutout", "blanchissage")))
-    return f"""<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    return f"""<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">{_app_head(pool)}
 <title>{esc(pool["name"])} — Pool LNH {season}</title><style>{CSS}</style></head><body><div class="wrap">
 <div class="top"><div class="sp"><h1>{esc(pool["name"])}</h1><p class="sub">Pool fantasy LNH · saison {season} · stats au {esc(updated_at or "—")} · mise à jour automatique chaque matin</p></div><button class="btn" id="theme">☀️ / 🌙</button></div>
 <div class="podium">{pod(1)}{pod(0)}{pod(2)}</div>

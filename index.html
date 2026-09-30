@@ -1,4 +1,4 @@
-<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black"><meta name="theme-color" content="#070B14"><meta name="apple-mobile-web-app-title" content="Pool des boys 2026-27"><link rel="apple-touch-icon" href="icon-180.png"><link rel="manifest" href="manifest.webmanifest">
 <title>Pool des boys 2026-27 — Pool LNH 2026-27</title><style>
 :root{--bg:#070B14;--panel:#111A2E;--panel2:#0D1424;--line:#24314F;--ice:#E8EEF7;--muted:#8A98B8;--gold:#F1D77A;--gold2:#C9A227;--green:#2FBF71;--red:#FF7A8A;--blue:#3A86FF}
 [data-theme=light]{--bg:#F2F4F8;--panel:#FFFFFF;--panel2:#F7F8FB;--line:#D6DCE8;--ice:#111827;--muted:#5B6678;--gold:#8A6A00;--gold2:#B8860B;--green:#1B8F52;--red:#C0273D}
@@ -71,6 +71,7 @@ tr.pl{cursor:pointer}tr.pl:hover td{background:rgba(128,128,128,.08)}
 document.getElementById('theme').onclick=function(){var c=document.documentElement.dataset.theme==='light'?'':'light';
 document.documentElement.dataset.theme=c;localStorage.setItem(k,c);};
 if(location.hash){var e=document.getElementById(location.hash.slice(1));if(e)e.scrollIntoView();}
+var T0=Date.now();document.addEventListener('visibilitychange',function(){if(!document.hidden&&Date.now()-T0>6e5)location.reload();});
 var D=document.getElementById('pdata');if(!D)return;D=JSON.parse(D.textContent);var M=document.getElementById('pc');
 function h(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function box(v,l){return '<div><b>'+(v==null?'–':v)+'</b><span>'+l+'</span></div>';}

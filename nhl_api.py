@@ -62,6 +62,39 @@ class NHL:
         f.write_text(json.dumps(data), "utf-8")
         return data
 
+    def injuries(self, force=False):
+        """Blessés LNH (ESPN : l'API LNH n'en publie pas) — {nhlId: {...}}, appariés par nom (+ équipe si homonymes)."""
+        f = self.cache / "injuries.json"
+        if not force and f.exists() and time.time() - f.stat().st_mtime < 3 * 3600:
+            data = json.loads(f.read_text("utf-8"))
+        else:
+            r = requests.get("https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/injuries", timeout=20)   # UA par défaut : ESPN refuse les autres (403)
+            r.raise_for_status()
+            data = r.json()
+            f.write_text(json.dumps(data), "utf-8")
+        return data
+
+    @staticmethod
+    def match_injuries(data, players):
+        import unicodedata
+        norm = lambda s: "".join(c for c in unicodedata.normalize("NFKD", s or "").lower() if c.isalnum())
+        by_name = {}
+        for p in players:
+            by_name.setdefault(norm(p["first"] + p["last"]), []).append(p)
+        out = {}
+        for team in data.get("injuries", []):
+            for i in team.get("injuries", []):
+                a, d = i.get("athlete", {}), i.get("details", {})
+                cands = by_name.get(norm(a.get("firstName", "") + a.get("lastName", "")), [])
+                if len(cands) > 1:   # homonymes : départager par l'équipe (abréviations ESPN parfois tronquées : TB, NJ, LA...)
+                    ab = (a.get("team") or {}).get("abbreviation", "").upper()
+                    cands = [p for p in cands if ab and p["team"].startswith(ab)]
+                if len(cands) != 1:
+                    continue
+                out[str(cands[0]["id"])] = {"status": i.get("status", ""), "type": d.get("type", ""), "side": d.get("side", ""),
+                                            "ret": d.get("returnDate", ""), "since": (i.get("date") or "")[:10]}
+        return out
+
     @staticmethod
     def merge_players(new, old):
         """Alignements à jour + joueurs connus qui n'y sont plus (renvoyés dans la LAH, blessés longue durée…),

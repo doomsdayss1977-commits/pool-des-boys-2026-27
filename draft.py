@@ -201,7 +201,7 @@ def auto_pick(pool, players, rng=random):
         p = players.get(str(wid))
         if p and str(wid) not in taken and nd[p["pos"]] > 0:
             return make_pick(pool, wid, players)
-    cands = [p for p in players.values() if str(p["id"]) not in taken and nd[p["pos"]] > 0]
+    cands = [p for p in players.values() if str(p["id"]) not in taken and nd[p["pos"]] > 0 and not p.get("off")]
     # Priorise les postes à remplir en proportion du manque restant
     remaining = sum(nd.values())
     best = max(cands, key=lambda p: score(p) * (1 + nd[p["pos"]] / remaining))

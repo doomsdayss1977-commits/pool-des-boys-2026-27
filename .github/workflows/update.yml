@@ -21,7 +21,7 @@ jobs:
       - run: |
           git config user.name "hockey-draft-bot"
           git config user.email "hockey-draft-bot@users.noreply.github.com"
-          git add index.html history.json stats_prev.json
+          git add index.html history.json stats_prev.json phist.json flags.json
           git diff --cached --quiet || git commit -m "Stats du $(date -u +%F)"
           git pull --rebase -X theirs   # l app a pu synchroniser pendant l execution ; la page du robot l emporte
           git push

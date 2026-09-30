@@ -59,6 +59,11 @@ tr.pl{cursor:pointer}tr.pl:hover td{background:rgba(128,128,128,.08)}
 .live{display:inline-block;background:#E0243B;color:#fff;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700;letter-spacing:2px;animation:bl 1.4s infinite}
 @keyframes bl{50%{opacity:.45}}
 .board{overflow-x:auto}.board table{min-width:600px}.board td{font-size:13px;vertical-align:top}.board td.last{outline:2px solid var(--gold2);outline-offset:-2px}
+.split{display:flex;flex:1;height:12px;border-radius:6px;overflow:hidden;background:rgba(128,128,128,.15)}.split i{display:block;height:100%}
+.srow{display:flex;align-items:center;gap:12px;margin:8px 0}.srow .sn{width:130px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.srow b{width:56px;text-align:right}
+.lg{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}.lg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
+.form{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.form:last-child{border:0}.form .w{flex:1}
+.pos{color:var(--green)}.neg{color:var(--red)}
 .muted{color:var(--muted)}.foot{margin-top:40px;color:var(--muted);font-size:12px;text-align:center}
 @media(max-width:640px){.podium{grid-template-columns:1fr}h1{font-size:28px}td,th{padding:7px 6px}.hide-sm{display:none}.grid2{grid-template-columns:1fr}}
 """
@@ -229,7 +234,7 @@ def build_html(pool, res, teams_by_abbr, updated_at, hall_of_fame=None, players=
         f'<td>{logo(x["participant"]["team"], "logo sm")} {esc(team(x["participant"]["team"])["short"])} '
         f'<span class="muted hide-sm">{f"{x['teamRow']['wins']}-{x['teamRow']['losses']}-{x['teamRow']['otl']}" if x.get("teamRow") else ""}</span></td>'
         f'<td class="num">{_signed(x["yesterday"]["fp"])}</td><td class="num hide-sm">{_signed(x["week"]) if x.get("week") is not None else "–"}</td>'
-        f'<td class="num hide-sm">{_fmt(x["teamPts"])}</td><td class="num tot">{_fmt(x["total"])}</td>'
+        f'<td class="num hide-sm">{_fmt(x["teamPts"])}</td><td class="num tot">{_fmt(x["total"])}</td><td class="num muted hide-sm">{_fmt(round(x["proj"])) if x.get("proj") is not None else "–"}</td>'
         f'<td class="hide-sm" style="width:18%"><div style="height:6px;border-radius:3px;background:rgba(128,128,128,.2);overflow:hidden"><i style="display:block;height:100%;width:{100 * x["total"] / mx:.0f}%;background:linear-gradient(90deg,#3A86FF,#C9A227)"></i></div></td></tr>'
         for x in rows)
 
@@ -294,14 +299,34 @@ def build_html(pool, res, teams_by_abbr, updated_at, hall_of_fame=None, players=
 
     hof = "".join(f'<div class="h"><span class="muted">{_season(h["season"])}</span><b>🏆 {esc(h["name"])}</b><span class="muted">{esc(h["pool"])} · {_fmt(h["total"])} pts</span></div>' for h in (hall_of_fame or []))
 
+    split_cols = (("F", "Attaquants", "#3A86FF"), ("D", "Défenseurs", "#2FBF71"), ("G", "Gardiens", "#C9A227"), ("T", "Équipe LNH", "#B06CFF"))
+    ssum = lambda x: sum(max(0, x.get("split", {}).get(k, 0)) for k, _, _ in split_cols)
+    smax = max([1] + [ssum(x) for x in rows])
+    split = "".join(
+        f'<div class="srow"><span class="sn" style="color:{x["participant"]["color"]}">{esc(x["participant"]["name"])}</span><div class="split">'
+        + "".join(f'<i style="width:{100 * x["split"][k] / smax:.1f}%;background:{c}" title="{n} : {_fmt(x["split"][k])}"></i>' for k, n, c in split_cols if x.get("split", {}).get(k, 0) > 0)
+        + f'</div><b class="tot" style="font-size:16px">{_fmt(x["total"])}</b></div>' for x in rows) if any(x["total"] for x in rows) else ""
+    if split:
+        split = f'<h2>D’où viennent les points</h2><div class="card">{split}<div class="lg">' + "".join(f'<span><i style="background:{c}"></i>{n}</span>' for _, n, c in split_cols) + "</div></div>"
+
+    def form(arr, cold):
+        return "".join(f'<div class="form"><span class="tag {h["player"]["pos"]}">{h["player"]["pos"]}</span>{logo(h["player"]["team"], "logo sm")}<span class="w"><b>{pname(h["player"])}</b> <span style="color:{h["color"]};font-size:12px">{esc(h["who"])}</span></span>'
+                       f'<b class="{"neg" if cold else "pos"}">{f"{h["gp7"]} PJ · 0 pt" if cold else _signed(h["f7"])}</b></div>' for h in arr)
+    hot = ""
+    if res.get("hot") or res.get("cold"):
+        hot = (f'<div class="grid2"><div><h2>🔥 En feu · 7 jours</h2><div class="card">{form(res.get("hot", []), False) or "<p class=muted>Rien encore.</p>"}</div></div>'
+               f'<div><h2>🧊 À froid · 7 jours</h2><div class="card">{form(res.get("cold", []), True) or "<p class=muted>Personne en panne sèche.</p>"}</div></div></div>')
+
     bareme = " · ".join(f"{lbl} {_fmt(pts[k])}" for k, lbl in (("goal", "but"), ("assist", "passe"), ("teamWin", "victoire d'équipe"), ("goalieWin", "victoire du gardien"), ("shutout", "blanchissage")))
     return f"""<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{esc(pool["name"])} — Pool LNH {season}</title><style>{CSS}</style></head><body><div class="wrap">
 <div class="top"><div class="sp"><h1>{esc(pool["name"])}</h1><p class="sub">Pool fantasy LNH · saison {season} · stats au {esc(updated_at or "—")} · mise à jour automatique chaque matin</p></div><button class="btn" id="theme">☀️ / 🌙</button></div>
 <div class="podium">{pod(1)}{pod(0)}{pod(2)}</div>
-<h2>Classement</h2><div class="card" style="padding:0;overflow:hidden"><table><thead><tr><th></th><th>Participant</th><th>Équipe LNH</th><th class="num">Hier</th><th class="num hide-sm">7 jours</th><th class="num hide-sm">Pts équipe</th><th class="num">Total</th><th class="hide-sm"></th></tr></thead><tbody>{stand}</tbody></table></div>
+<h2>Classement</h2><div class="card" style="padding:0;overflow:hidden"><table><thead><tr><th></th><th>Participant</th><th>Équipe LNH</th><th class="num">Hier</th><th class="num hide-sm">7 jours</th><th class="num hide-sm">Pts équipe</th><th class="num">Total</th><th class="num hide-sm" title="Projection sur 82 matchs au rythme actuel">Proj. 82</th><th class="hide-sm"></th></tr></thead><tbody>{stand}</tbody></table></div>
 <h2>Tendance (30 jours)</h2><div class="card">{_chart(rows, res.get("dates", []))}</div>
 <h2>Points d'hier</h2>{yesterday()}
+{hot}
+{split}
 {f'<h2>Trophées du pool</h2><div class="troph">{troph}</div>' if troph else ""}
 {playoff}
 <h2>Alignements</h2>{"".join(roster(x) for x in rows)}

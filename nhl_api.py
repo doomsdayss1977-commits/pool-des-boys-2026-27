@@ -62,6 +62,13 @@ class NHL:
         f.write_text(json.dumps(data), "utf-8")
         return data
 
+    @staticmethod
+    def merge_players(new, old):
+        """Alignements à jour + joueurs connus qui n'y sont plus (renvoyés dans la LAH, blessés longue durée…),
+        marqués off : un joueur déjà repêché ne doit jamais disparaître des données."""
+        ids = {p["id"] for p in new}
+        return new + [dict(p, off=True) for p in old if p["id"] not in ids]
+
     def standings(self, date="now", force=False):
         """Classement à une date (YYYY-MM-DD ou 'now'), trié du 1er au dernier."""
         raw = self._get(f"standings/{date}", f"standings_{date}", force)["standings"]
@@ -81,6 +88,17 @@ class NHL:
                 "colors": TEAM_COLORS.get(ab, ("#444444", "#999999")),
             })
         out.sort(key=lambda x: x["rank"])
+        return out
+
+    def week_games(self, force=False):
+        """{abbr: nombre de matchs (saison/séries) des 7 prochains jours}."""
+        out = {}
+        for day in self._get("schedule/now", "schedule_now", force).get("gameWeek", []):
+            for g in day.get("games", []):
+                if g.get("gameType") in (2, 3):
+                    for side in ("awayTeam", "homeTeam"):
+                        ab = g[side]["abbrev"]
+                        out[ab] = out.get(ab, 0) + 1
         return out
 
     def roster(self, abbr, season, force=False):

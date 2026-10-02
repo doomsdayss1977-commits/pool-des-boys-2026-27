@@ -73,7 +73,8 @@ JS = """
 document.getElementById('theme').onclick=function(){var c=document.documentElement.dataset.theme==='light'?'':'light';
 document.documentElement.dataset.theme=c;localStorage.setItem(k,c);};
 if(location.hash){var e=document.getElementById(location.hash.slice(1));if(e)e.scrollIntoView();}
-var T0=Date.now();document.addEventListener('visibilitychange',function(){if(!document.hidden&&Date.now()-T0>6e5)location.reload();});
+var LM=null;function chk(){if(document.hidden)return;fetch(location.pathname+'?v='+Date.now(),{method:'HEAD',cache:'no-store'}).then(function(r){var m=r.ok&&(r.headers.get('last-modified')||r.headers.get('etag'));if(!m)return;if(LM===null)LM=m;else if(m!==LM&&!document.querySelector('#pc.on'))location.reload();}).catch(function(){});}
+chk();setInterval(chk,2e4);document.addEventListener('visibilitychange',chk);
 var D=document.getElementById('pdata');if(!D)return;D=JSON.parse(D.textContent);var M=document.getElementById('pc');
 function h(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function box(v,l){return '<div><b>'+(v==null?'–':v)+'</b><span>'+l+'</span></div>';}
@@ -212,7 +213,7 @@ def _draft_html(pool, teams_by_abbr, players):
     now = (f'<div class="card" style="margin-top:16px"><span class="live">EN DIRECT</span> &nbsp; Au choix : <b style="color:{up["color"]}">{esc(up["name"])}</b>'
            f' <span class="muted">· choix n° {i + 1} de {n_total} · ronde {r + 1}</span></div>') if up else ""
     return f"""<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">{_app_head(pool)}
-<meta http-equiv="refresh" content="60"><title>{esc(pool["name"])} — Repêchage en direct</title><style>{CSS}</style></head><body><div class="wrap">
+<title>{esc(pool["name"])} — Repêchage en direct</title><style>{CSS}</style></head><body><div class="wrap">
 <div class="top"><div class="sp"><h1>{esc(pool["name"])}</h1><p class="sub">Repêchage en direct · {len(picks)} choix sur {n_total} · la page se recharge seule (délai de quelques minutes)</p></div><button class="btn" id="theme">☀️ / 🌙</button></div>
 {now}
 {f'<h2>Derniers choix</h2><div class="card"><ul class="moves">{recent}</ul></div>' if recent else ""}

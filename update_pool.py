@@ -1,6 +1,7 @@
 """Exécuté par GitHub Actions dans le dépôt du pool : stats LNH du jour -> index.html (+ historique, Discord).
 Si la LNH ne répond pas pour toutes les équipes, on échoue SANS rien écrire : la page d'hier reste en ligne."""
 import datetime as dt
+import hashlib
 import json
 import os
 import sys
@@ -35,20 +36,32 @@ def run(nhl, root=".", today=None):
         week = nhl.week_games(force=True)
     except Exception:
         week = None
-    today = today or time.strftime("%Y-%m-%d", time.gmtime())
-    res = season.compute(pool, pool["players"], stats, teams, playoffs, history, prev, today, phist, week)
+    # Journée de hockey : commence à 10h UTC (6h au Québec), pour qu'une soirée de matchs reste dans la même journée.
+    today = today or (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=10)).date().isoformat()
+    rolled = not prev or prev.get("date") != today
+    if rolled:   # 1er passage de la journée : la base du jour = stats actuelles, on garde celle de la veille
+        prev = {"date": today, "players": stats, "before": (prev or {}).get("players")}
+    live = stats != prev["players"]   # des matchs de ce soir sont terminés → points de la soirée, sinon ceux d'hier
+    base = prev["players"] if live else prev.get("before")
+    res = season.compute(pool, pool["players"], stats, teams, playoffs, history, base and {"date": None, "players": base}, today, phist, week)
+    res["live"] = live
     res["alerts"] = alerts(pool, res["flags"], old_flags)
     updated = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
     html = web_export.build_html(pool, res, {t["abbr"]: t for t in pool["teams"]}, updated, pool.get("hallOfFame", []))
+    sha = hashlib.sha1(html.replace(updated, "").encode()).hexdigest()   # l'heure seule ne compte pas comme un changement
+    if not rolled and sha == load(root / "page.sha.json", None):
+        print(f"Aucun nouveau point ({updated}) : rien publié")
+        return pool, None, today, False
     # Tout est calculé : on écrit seulement maintenant.
     (root / "index.html").write_text(html, "utf-8")
+    (root / "page.sha.json").write_text(json.dumps(sha), "utf-8")
     (root / "history.json").write_text(json.dumps(res["history"]), "utf-8")
     (root / "phist.json").write_text(json.dumps(res["phist"]), "utf-8")
     (root / "flags.json").write_text(json.dumps(res["flags"]), "utf-8")
-    if not prev or prev.get("date") != today:
-        (root / "stats_prev.json").write_text(json.dumps({"date": today, "players": stats}), "utf-8")
+    if rolled:
+        (root / "stats_prev.json").write_text(json.dumps(prev), "utf-8")
     print(f"{len(stats)} joueurs, {len(teams)} équipes, {updated}")
-    return pool, res, today
+    return pool, res, today, rolled
 
 
 def alerts(pool, flags, old):
@@ -94,13 +107,15 @@ def weekly(pool, res, url):
     return "\n".join(msg + ([url] if url else []))
 
 
-def discord(pool, res, today):
+def discord(pool, res, today, rolled=True):
     hook = os.environ.get("DISCORD_WEBHOOK")
-    if not hook:
+    if not hook or not res:
         return
     url = os.environ.get("PAGE_URL", "")
     if res.get("alerts"):
         _post(hook, f"**{pool['name']}** — alertes\n" + "\n".join(res["alerts"]))
+    if not rolled:   # bilans : seulement au 1er passage de la journée, pas aux 20 min du soir
+        return
     if dt.date.fromisoformat(today).weekday() == 0 and any(r.get("week") for r in res["rows"]):
         _post(hook, weekly(pool, res, url))
     if not any(r["yesterday"]["fp"] for r in res["rows"]):

@@ -2,7 +2,9 @@ name: Mise à jour quotidienne du pool
 on:
   schedule:
     - cron: "0 11 * * *"   # 11h UTC = 7h (été) / 6h (hiver) au Québec, après les matchs de la veille
+    - cron: "*/20 23,0-5 * * *"   # soirs de match : aux 20 min de 19h à 1h40 (été) ; ne publie que si les points changent
   workflow_dispatch:
+concurrency: pool-update   # deux passages ne poussent jamais en même temps
 permissions:
   contents: write
 jobs:
@@ -21,7 +23,7 @@ jobs:
       - run: |
           git config user.name "hockey-draft-bot"
           git config user.email "hockey-draft-bot@users.noreply.github.com"
-          git add index.html history.json stats_prev.json phist.json flags.json
+          git add index.html history.json stats_prev.json phist.json flags.json page.sha.json
           git diff --cached --quiet || git commit -m "Stats du $(date -u +%F)"
           git pull --rebase -X theirs   # l app a pu synchroniser pendant l execution ; la page du robot l emporte
           git push

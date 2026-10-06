@@ -85,7 +85,7 @@ M.querySelector('.card').innerHTML='<button class="btn x">✕</button><div class
 +'<div class="sg">'+(g?box(s.gp,'PJ')+box(s.w,'V')+box(s.so,'BL')+box(s.svp!=null?(s.svp).toFixed(3):null,'%ARR'):box(s.gp,'PJ')+box(s.g,'B')+box(s.a,'A')+box(s.pm,'+/-'))+'</div>'
 +'<table>'+p.brk.map(function(x){return '<tr><td>'+x[0]+' '+h(x[2])+' × '+x[1]+'</td><td class="num">'+(+(x[0]*x[1]).toFixed(2))+'</td></tr>';}).join('')
 +(p.base?'<tr><td class="muted">avant son arrivée dans l’équipe</td><td class="num">−'+p.base+'</td></tr>':'')
-+'<tr><td><b>Points au pool</b></td><td class="num tot">'+p.fp+'</td></tr>'+(p.y?'<tr><td class="muted">dont hier</td><td class="num">+'+p.y+'</td></tr>':'')+'</table>';
++'<tr><td><b>Points au pool</b></td><td class="num tot">'+p.fp+'</td></tr>'+(p.y?'<tr><td class="muted">dont '+(D.dl||'hier')+'</td><td class="num">+'+p.y+'</td></tr>':'')+'</table>';
 M.className='on';});
 document.addEventListener('keydown',function(e){if(e.key==='Escape')M.className='';});
 })();
@@ -228,6 +228,7 @@ def build_html(pool, res, teams_by_abbr, updated_at, hall_of_fame=None, players=
         return _draft_html(pool, teams_by_abbr, players)
     rows, flags = res["rows"], res.get("flags", {})
     pts = pool["rules"]["points"]
+    dl = "ce soir" if res.get("live") else "hier"   # le robot du soir montre les points de la soirée en cours
     season = _season(pool["rules"]["season"])
     mx = max(1, *[r["total"] for r in rows]) if rows else 1
     team = lambda ab: teams_by_abbr.get(ab, {"nameFr": ab, "short": ab, "colors": ["#1B2745"]})
@@ -277,7 +278,7 @@ def build_html(pool, res, teams_by_abbr, updated_at, hall_of_fame=None, players=
                       f'<td class="num hide-sm">{s.get("gp", 0)}</td><td class="num">{"–" if g else s.get("g", 0)}</td><td class="num">{"–" if g else s.get("a", 0)}</td>'
                       f'<td class="num">{s.get("w", 0) if g else "–"}</td><td class="num">{s.get("so", 0) if g else "–"}</td><td class="num tot" style="font-size:16px">{_fmt(l["fp"])}</td></tr>')
         return (f'<div class="card roster" id="p-{p["id"]}"><div class="head">{logo(p["team"])}<div><h3 style="color:{p["color"]}">{x["rank"]}. {esc(p["name"])}</h3>'
-                f'<div class="meta">{esc(t["nameFr"])}{f" · {tr['wins']}-{tr['losses']}-{tr['otl']}" if tr else ""} · victoires × {_fmt(pts["teamWin"])} = {_fmt(x["teamPts"])} pts · hier {_signed(x["yesterday"]["fp"])}</div></div>'
+                f'<div class="meta">{esc(t["nameFr"])}{f" · {tr['wins']}-{tr['losses']}-{tr['otl']}" if tr else ""} · victoires × {_fmt(pts["teamWin"])} = {_fmt(x["teamPts"])} pts · {dl} {_signed(x["yesterday"]["fp"])}</div></div>'
                 f'<div style="margin-left:auto" class="tot">{_fmt(x["total"])} pts</div></div>'
                 f'<table><thead><tr><th class="hide-sm">R</th><th>Joueur</th><th>Pos</th><th>Éq.</th><th class="num hide-sm">PJ</th><th class="num">B</th><th class="num">A</th><th class="num">V</th><th class="num">BL</th><th class="num">Pts</th></tr></thead>'
                 f'<tbody>{lines}</tbody></table></div>')
@@ -339,9 +340,9 @@ def build_html(pool, res, teams_by_abbr, updated_at, hall_of_fame=None, players=
 <title>{esc(pool["name"])} — Pool LNH {season}</title><style>{CSS}</style></head><body><div class="wrap">
 <div class="top"><div class="sp"><h1>{esc(pool["name"])}</h1><p class="sub">Pool fantasy LNH · saison {season} · stats au {esc(updated_at or "—")} · mise à jour automatique chaque matin</p></div><button class="btn" id="theme">☀️ / 🌙</button></div>
 <div class="podium">{pod(1)}{pod(0)}{pod(2)}</div>
-<h2>Classement</h2><div class="card" style="padding:0;overflow:hidden"><table><thead><tr><th></th><th>Participant</th><th>Équipe LNH</th><th class="num">Hier</th><th class="num hide-sm">7 jours</th><th class="num hide-sm">Pts équipe</th><th class="num">Total</th><th class="num hide-sm" title="Projection sur 82 matchs au rythme actuel">Proj. 82</th><th class="hide-sm"></th></tr></thead><tbody>{stand}</tbody></table></div>
+<h2>Classement</h2><div class="card" style="padding:0;overflow:hidden"><table><thead><tr><th></th><th>Participant</th><th>Équipe LNH</th><th class="num">{dl.capitalize()}</th><th class="num hide-sm">7 jours</th><th class="num hide-sm">Pts équipe</th><th class="num">Total</th><th class="num hide-sm" title="Projection sur 82 matchs au rythme actuel">Proj. 82</th><th class="hide-sm"></th></tr></thead><tbody>{stand}</tbody></table></div>
 <h2>Tendance (30 jours)</h2><div class="card">{_chart(rows, res.get("dates", []))}</div>
-<h2>Points d'hier</h2>{yesterday()}
+<h2>Points {"de la soirée" if res.get("live") else "d’hier"}</h2>{yesterday()}
 {hot}
 {split}
 {f'<h2>Trophées du pool</h2><div class="troph">{troph}</div>' if troph else ""}
@@ -350,5 +351,5 @@ def build_html(pool, res, teams_by_abbr, updated_at, hall_of_fame=None, players=
 {f'<h2>Transactions</h2><div class="card"><ul class="moves">{moves}</ul></div>' if moves else ""}
 {f'<h2>Mur des champions</h2><div class="hof">{hof}</div>' if hof else ""}
 <p class="foot">Barème : {bareme}. Remplacements permis : {pool["rules"].get("maxReplacements", 2)} par participant{f" · date limite des transactions : {pool['rules']['tradeDeadline']}" if pool["rules"].get("tradeDeadline") else ""}. Données : NHL.com. Généré par Repêchage Fantasy LNH.</p></div>
-<div id="pc"><div class="card"></div></div>{_json_script("pdata", {"p": _player_data(pool, rows)})}
+<div id="pc"><div class="card"></div></div>{_json_script("pdata", {"p": _player_data(pool, rows), "dl": dl})}
 <script>{JS}</script></body></html>"""

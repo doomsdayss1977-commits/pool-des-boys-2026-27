@@ -70,6 +70,7 @@ tr.pl{cursor:pointer}tr.pl:hover td{background:rgba(128,128,128,.08)}
 
 JS = """
 (function(){var k='pool-theme',t=localStorage.getItem(k);if(t)document.documentElement.dataset.theme=t;
+document.getElementById('refresh').onclick=function(){this.disabled=true;fetch(location.pathname,{cache:'reload'}).catch(function(){}).then(function(){location.reload();});};
 document.getElementById('theme').onclick=function(){var c=document.documentElement.dataset.theme==='light'?'':'light';
 document.documentElement.dataset.theme=c;localStorage.setItem(k,c);};
 if(location.hash){var e=document.getElementById(location.hash.slice(1));if(e)e.scrollIntoView();}
@@ -214,7 +215,7 @@ def _draft_html(pool, teams_by_abbr, players):
            f' <span class="muted">· choix n° {i + 1} de {n_total} · ronde {r + 1}</span></div>') if up else ""
     return f"""<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">{_app_head(pool)}
 <title>{esc(pool["name"])} — Repêchage en direct</title><style>{CSS}</style></head><body><div class="wrap">
-<div class="top"><div class="sp"><h1>{esc(pool["name"])}</h1><p class="sub">Repêchage en direct · {len(picks)} choix sur {n_total} · la page se recharge seule (délai de quelques minutes)</p></div><button class="btn" id="theme">☀️ / 🌙</button></div>
+<div class="top"><div class="sp"><h1>{esc(pool["name"])}</h1><p class="sub">Repêchage en direct · {len(picks)} choix sur {n_total} · la page se recharge seule (délai de quelques minutes)</p></div><button class="btn" id="refresh" title="Charger la dernière version">🔄<span class="hide-sm"> Actualiser</span></button><button class="btn" id="theme">☀️ / 🌙</button></div>
 {now}
 {f'<h2>Derniers choix</h2><div class="card"><ul class="moves">{recent}</ul></div>' if recent else ""}
 <h2>Tableau</h2><div class="card board" style="padding:0"><table><thead><tr><th></th>{head}</tr></thead><tbody>{body}</tbody></table></div>
@@ -338,7 +339,7 @@ def build_html(pool, res, teams_by_abbr, updated_at, hall_of_fame=None, players=
     bareme = " · ".join(f"{lbl} {_fmt(pts[k])}" for k, lbl in (("goal", "but"), ("assist", "passe"), ("teamWin", "victoire d'équipe"), ("goalieWin", "victoire du gardien"), ("shutout", "blanchissage")))
     return f"""<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">{_app_head(pool)}
 <title>{esc(pool["name"])} — Pool LNH {season}</title><style>{CSS}</style></head><body><div class="wrap">
-<div class="top"><div class="sp"><h1>{esc(pool["name"])}</h1><p class="sub">Pool fantasy LNH · saison {season} · stats au {esc(updated_at or "—")} · mise à jour automatique chaque matin</p></div><button class="btn" id="theme">☀️ / 🌙</button></div>
+<div class="top"><div class="sp"><h1>{esc(pool["name"])}</h1><p class="sub">Pool fantasy LNH · saison {season} · stats au {esc(updated_at or "—")} · mise à jour automatique chaque matin et aux 20 min les soirs de match</p></div><button class="btn" id="refresh" title="Charger la dernière version">🔄<span class="hide-sm"> Actualiser</span></button><button class="btn" id="theme">☀️ / 🌙</button></div>
 <div class="podium">{pod(1)}{pod(0)}{pod(2)}</div>
 <h2>Classement</h2><div class="card" style="padding:0;overflow:hidden"><table><thead><tr><th></th><th>Participant</th><th>Équipe LNH</th><th class="num">{dl.capitalize()}</th><th class="num hide-sm">7 jours</th><th class="num hide-sm">Pts équipe</th><th class="num">Total</th><th class="num hide-sm" title="Projection sur 82 matchs au rythme actuel">Proj. 82</th><th class="hide-sm"></th></tr></thead><tbody>{stand}</tbody></table></div>
 <h2>Tendance (30 jours)</h2><div class="card">{_chart(rows, res.get("dates", []))}</div>

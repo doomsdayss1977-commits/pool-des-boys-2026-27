@@ -16,6 +16,16 @@ import web_export
 from nhl_api import NHL
 
 
+def qc_now(u=None):
+    """Heure du Québec (HAE du 2e dimanche de mars au 1er dimanche de novembre, sinon HNE), sans base de fuseaux."""
+    u = u or dt.datetime.now(dt.timezone.utc)
+    def sunday(m, n):
+        d = dt.datetime(u.year, m, 1, tzinfo=dt.timezone.utc)
+        return d + dt.timedelta(days=(6 - d.weekday()) % 7 + 7 * (n - 1))
+    dst = sunday(3, 2) + dt.timedelta(hours=7) <= u < sunday(11, 1) + dt.timedelta(hours=6)
+    return u + dt.timedelta(hours=-4 if dst else -5)
+
+
 def load(path, default):
     return json.loads(Path(path).read_text("utf-8")) if Path(path).exists() else default
 
@@ -46,7 +56,7 @@ def run(nhl, root=".", today=None):
     res = season.compute(pool, pool["players"], stats, teams, playoffs, history, base and {"date": None, "players": base}, today, phist, week)
     res["live"] = live
     res["alerts"] = alerts(pool, res["flags"], old_flags)
-    updated = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
+    updated = qc_now().strftime("%Y-%m-%d %Hh%M")   # heure du Québec (le robot tourne en UTC chez GitHub)
     html = web_export.build_html(pool, res, {t["abbr"]: t for t in pool["teams"]}, updated, pool.get("hallOfFame", []))
     sha = hashlib.sha1(html.replace(updated, "").encode()).hexdigest()   # l'heure seule ne compte pas comme un changement
     if not rolled and sha == load(root / "page.sha.json", None):
